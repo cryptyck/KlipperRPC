@@ -28,6 +28,7 @@ Whatever, I usually stay up late, anyway. So I went ahead and started the print,
 
 You'll need...
  - discordrp
+ - pyyaml
  - requests
 
 That's it.
