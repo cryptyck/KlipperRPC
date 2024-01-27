@@ -1,0 +1,9 @@
+## NETWORK CONFIG ##
+network:
+  printer-ip: 192.168.1.39  # CHANGE THIS!!!
+  printer-port: 80 # You probably don't need to change this.
+
+## RPC CONFIG ##
+rpc:
+  update-delay: 15
+  client-id: "1200689886626332743"

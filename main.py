@@ -1,85 +1,28 @@
 from discordrp import Presence
 from datetime import timedelta
-import requests
-import json
-import time
-import urllib
-import socket
+import klipper, yaml, time
 
-printer_ip = "192.168.1.39" # Printer IP here, probably around 0.39% chance that this is what your printer uses... CHANGE THIS!!!
-printer_port = 80   # Default port for HTTP, 99.99% chance that this is what your printer uses by default
+with open("config.yaml", "r") as yaml_file:
+    config = yaml.safe_load(yaml_file)
 
-update_delay = 15   # 15 seconds is the minimum that Discord allows, IIRC
+printer_ip = config["network"]["printer-ip"]
+printer_port = config["network"]["printer-port"]
+update_delay = config["rpc"]["update-delay"]
+client_id = config["rpc"]["client-id"]
 
-
-client_id = "1200689886626332743" # Discord RPC stuff
-
-def isOpen(ip,port):
-   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-   try:
-      s.connect((ip, int(port)))
-      s.shutdown(2)
-      return True
-   except:
-      return False
-
-def get_printer_status():
-    hostonline = isOpen(printer_ip, printer_port)
-    if hostonline:
-        r = requests.get(f"http://{printer_ip}/printer/objects/query?&virtual_sdcard&print_stats")
-        print(r)
-        r = json.loads(r.text)
-        progress = r["result"]["status"]["virtual_sdcard"]["progress"]
-        roundedprogress = round(r["result"]["status"]["virtual_sdcard"]["progress"] * 100)
-        printtime = timedelta(seconds=round(r["result"]["status"]["print_stats"]["total_duration"]))
-        filename = r["result"]["status"]["print_stats"]["filename"]
-        state = r["result"]["status"]["print_stats"]["state"]
-        statusmessage = r["result"]["status"]["print_stats"]["message"]
-        metadatareq = requests.get(f"http://{printer_ip}/server/files/metadata?filename={urllib.parse.quote(filename)}")
-        print(metadatareq)
-        if metadatareq.status_code == 200:
-            metadatareq = json.loads(metadatareq.text)
-            eta = metadatareq["result"]["estimated_time"] - (progress * metadatareq["result"]["estimated_time"])
-        else:
-            eta = "Unavailable"
-        tempreq = requests.get(f"http://{printer_ip}/server/temperature_store?include_monitors=false")
-        print(tempreq)
-        tempreq = json.loads(tempreq.text)
-        bedtemp = tempreq["result"]["heater_bed"]["temperatures"][len(tempreq["result"]["heater_bed"]["temperatures"])-1]
-        nozzletemp = tempreq["result"]["extruder"]["temperatures"][len(tempreq["result"]["extruder"]["temperatures"])-1]
-
-        return {
-                    "hostonline": hostonline,
-                    "progresspercent":roundedprogress,
-                    "eta": eta,
-                    "filename": filename,
-                    "bedtemp": bedtemp,
-                    "nozzletemp": nozzletemp,
-                    "state": state,
-                    "statusmessage": statusmessage,
-                    "printtime": printtime
-            }
-    else:
-        return {
-                    "hostonline": hostonline,
-                    "progresspercent":"N/A",
-                    "eta": "N/A",
-                    "filename": "N/A",
-                    "bedtemp": "N/A",
-                    "nozzletemp": "N/A",
-                    "state": "N/A",
-                    "statusmessage": "N/A",
-                    "printtime": "N/A"
-            }
-
-
+art_assets = {
+    "Green": "all-good",
+    "Orange": "issue",
+    "Red": "failure"
+}
 
 with Presence(client_id) as presence:
-    print("Connected")
+    print("RPC Connected")
 
+    #TODO: rewrite this entire loop...
 
     while True:
-        print_info = get_printer_status()
+        print_info = klipper.get_printer_status(printer_ip, printer_port)   
         if print_info["state"] == "printing":
             presence.set(
                 {
@@ -89,7 +32,7 @@ with Presence(client_id) as presence:
                     "assets": {
                         "large_image": "klipperlogo",
                         "large_text": f"Nozzle temp: {print_info['nozzletemp']}℃, Bed temp: {print_info['bedtemp']}℃",
-                        "small_image": "all-good",
+                        "small_image": art_assets["Green"],
                         "small_text": "Looking good!",
                     },
                 }
@@ -100,7 +43,7 @@ with Presence(client_id) as presence:
                     "state": f"On standby...",
                     "assets": {
                         "large_image": "klipperlogo", 
-                        "small_image": "issue",
+                        "small_image": art_assets["Orange"],
                         "small_text": "Standing by...",
                     },
                 }
@@ -112,7 +55,7 @@ with Presence(client_id) as presence:
                     "assets": {
                         "large_image": "klipperlogo",
                         "large_text": f"Nozzle temp: {print_info['nozzletemp']}℃, Bed temp: {print_info['bedtemp']}℃",
-                        "small_image": "issue",
+                        "small_image": art_assets["Orange"],
                         "small_text": "Print paused...",
                     },
                 }
@@ -125,7 +68,7 @@ with Presence(client_id) as presence:
                     "assets": {
                         "large_image": "klipperlogo",
                         "large_text": f"Nozzle temp: {print_info['nozzletemp']}℃, Bed temp: {print_info['bedtemp']}℃",
-                        "small_image": "all-good",
+                        "small_image": art_assets["Green"],
                         "small_text": "Finished!",
                     },
                 }
@@ -137,7 +80,7 @@ with Presence(client_id) as presence:
                     "details": print_info["statusmessage"],
                     "assets": {
                         "large_image": "klipperlogo",
-                        "small_image": "failure",
+                        "small_image": art_assets["Red"],
                         "small_text": "An error has occured!",
                     },
                 }
@@ -149,7 +92,7 @@ with Presence(client_id) as presence:
                     "details": "Unable to retrieve printer status...",
                     "assets": {
                         "large_image": "klipperlogo",
-                        "small_image": "failure",
+                        "small_image": art_assets["Red"],
                         "small_text": "Unable to reach printer.",
                     },
                 }
